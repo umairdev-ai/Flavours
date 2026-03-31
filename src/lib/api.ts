@@ -1,8 +1,7 @@
-const rawApiUrl = import.meta.env.VITE_API_URL?.trim();
-
-export const API_BASE_URL = (rawApiUrl && rawApiUrl.length > 0 ? rawApiUrl : "/api").replace(/\/$/, "");
+// Update this one line if the backend URL changes.
+export const API_BASE_URL = "http://localhost:6000/api";
 
 export function buildApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${API_BASE_URL}${normalizedPath}`;
+  return `${API_BASE_URL.replace(/\/$/, "")}${normalizedPath}`;
 }
