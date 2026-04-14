@@ -25,9 +25,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } catch { return []; }
   });
 
+  const safeSetItem = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+  };
+
   const save = (newItems: CartItem[]) => {
     setItems(newItems);
-    localStorage.setItem("cart", JSON.stringify(newItems));
+    safeSetItem("cart", JSON.stringify(newItems));
   };
 
   const addItem = useCallback((item: MenuItem) => {
@@ -36,7 +44,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const next = existing
         ? prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i)
         : [...prev, { ...item, quantity: 1 }];
-      localStorage.setItem("cart", JSON.stringify(next));
+      safeSetItem("cart", JSON.stringify(next));
       return next;
     });
   }, []);
@@ -44,7 +52,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const removeItem = useCallback((id: string) => {
     setItems(prev => {
       const next = prev.filter(i => i.id !== id);
-      localStorage.setItem("cart", JSON.stringify(next));
+      safeSetItem("cart", JSON.stringify(next));
       return next;
     });
   }, []);
@@ -53,7 +61,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (qty < 1) return removeItem(id);
     setItems(prev => {
       const next = prev.map(i => i.id === id ? { ...i, quantity: qty } : i);
-      localStorage.setItem("cart", JSON.stringify(next));
+      safeSetItem("cart", JSON.stringify(next));
       return next;
     });
   }, [removeItem]);

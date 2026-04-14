@@ -1,81 +1,22 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, CheckCircle, User, Mail, Phone } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { buildApiUrl } from "@/lib/api";
 
 export default function CartPage() {
   const { items, updateQuantity, removeItem, clearCart, total } = useCart();
-  const [orderPlaced, setOrderPlaced] = useState(false);
-  const [orderType, setOrderType] = useState<"delivery" | "pickup">("delivery");
-  const [userDetails, setUserDetails] = useState({ name: "", email: "", phone: "" });
-  const [showUserForm, setShowUserForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
-  const finalTotal = total + (orderType === "delivery" && total < 500 ? 49 : 0) + Math.round(total * 0.05);
-
-  const handlePlaceOrder = async () => {
-    if (!userDetails.name || !userDetails.email || !userDetails.phone) {
-      setShowUserForm(true);
+  const handleBookTable = () => {
+    if (!localStorage.getItem("userToken")) {
+      navigate("/auth");
       return;
     }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const orderData = {
-        userName: userDetails.name,
-        email: userDetails.email,
-        phone: userDetails.phone,
-        items: items.map(item => ({
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity
-        })),
-        total: finalTotal
-      };
-
-      const res = await fetch(buildApiUrl("/orders"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderData)
-      });
-
-      if (res.ok) {
-        clearCart();
-        setOrderPlaced(true);
-      } else {
-        const data = await res.json();
-        setError(data.message || "Failed to place order");
-      }
-    } catch (err) {
-      setError("Network error. Please try again.");
-    }
-    setLoading(false);
+    navigate("/reserve");
   };
 
-  if (orderPlaced) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <div className="text-center space-y-4 animate-in fade-in zoom-in">
-          <CheckCircle className="h-20 w-20 text-accent mx-auto" />
-          <h2 className="text-3xl font-bold">Order Confirmed!</h2>
-          <p className="text-muted-foreground">Your order has been placed successfully. Thank you!</p>
-          <p className="text-sm text-muted-foreground">
-            {orderType === "delivery" ? "Estimated delivery: 30-45 minutes" : "Pickup ready in 20 minutes"}
-          </p>
-          <Link
-            to="/menu"
-            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-8 py-3 rounded-full font-semibold hover:bg-primary/90 transition-all mt-4"
-          >
-            Order More <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   if (items.length === 0) {
     return (
@@ -141,76 +82,18 @@ export default function CartPage() {
           <div className="bg-card border rounded-2xl p-6 h-fit sticky top-24 space-y-6">
             <h3 className="text-lg font-bold">Order Summary</h3>
 
-            {/* Order type */}
-            <div className="flex gap-2">
-              {(["delivery", "pickup"] as const).map(type => (
-                <button
-                  key={type}
-                  onClick={() => setOrderType(type)}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                    orderType === type
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  {type === "delivery" ? "🚗 Delivery" : "🏪 Pickup"}
-                </button>
-              ))}
-            </div>
-
-            {/* User Details Form */}
-            {showUserForm && (
-              <div className="space-y-4 border-t pt-4">
-                <h4 className="font-semibold flex items-center gap-2"><User className="h-4 w-4" /> Contact Details</h4>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Full Name"
-                    required
-                    value={userDetails.name}
-                    onChange={e => setUserDetails(p => ({ ...p, name: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <input
-                    type="email"
-                    placeholder="Email Address"
-                    required
-                    value={userDetails.email}
-                    onChange={e => setUserDetails(p => ({ ...p, email: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <input
-                    type="tel"
-                    placeholder="Phone Number"
-                    required
-                    value={userDetails.phone}
-                    onChange={e => setUserDetails(p => ({ ...p, phone: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-              </div>
-            )}
-
             <div className="space-y-3 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>₹{total}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">{orderType === "delivery" ? "Delivery Fee" : "Pickup"}</span><span>{orderType === "delivery" && total < 500 ? "₹49" : "FREE"}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">GST (5%)</span><span>₹{Math.round(total * 0.05)}</span></div>
-              <div className="border-t pt-3 flex justify-between font-bold text-base">
-                <span>Total</span>
-                <span className="text-primary">
-                  ₹{finalTotal}
-                </span>
-              </div>
             </div>
 
             {error && <p className="text-destructive text-sm">{error}</p>}
 
             <button
-              onClick={handlePlaceOrder}
+              onClick={handleBookTable}
               disabled={loading}
               className="w-full bg-primary text-primary-foreground py-3.5 rounded-xl font-semibold hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
             >
-              {loading ? "Placing Order..." : "Place Order"}
+              {loading ? "Opening reservation..." : "Book a Table"}
             </button>
           </div>
         </div>

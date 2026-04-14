@@ -1,6 +1,20 @@
+import { useEffect, useState } from "react";
 import { UtensilsCrossed, MapPin, Phone, Mail, Clock } from "lucide-react";
 
 export default function Footer() {
+  const [showReserve, setShowReserve] = useState(false);
+
+  useEffect(() => {
+    const update = () => {
+      const userToken = Boolean(localStorage.getItem("userToken"));
+      const adminToken = Boolean(localStorage.getItem("adminToken"));
+      setShowReserve(userToken && !adminToken);
+    };
+    update();
+    window.addEventListener("authChanged", update);
+    return () => window.removeEventListener("authChanged", update);
+  }, []);
+
   return (
     <footer className="bg-foreground text-background">
       <div className="container mx-auto px-4 py-16">
@@ -9,11 +23,11 @@ export default function Footer() {
             <div className="flex items-center gap-2">
               <UtensilsCrossed className="h-6 w-6 text-primary" />
               <span className="text-xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
-                FLAV<span className="text-primary">OURS</span>
+                MEZB<span className="text-primary">AAN</span>
               </span>
             </div>
             <p className="text-sm opacity-70 leading-relaxed">
-              Where bold flavours meet unforgettable dining. Experience the finest culinary artistry in the city.
+              Where bold spices meet unforgettable dining. Experience the finest culinary artistry in the city.
             </p>
           </div>
           <div className="space-y-4">
@@ -21,7 +35,7 @@ export default function Footer() {
             <div className="space-y-3 text-sm opacity-70">
               <div className="flex items-center gap-2"><MapPin className="h-4 w-4 shrink-0" /> 123 Culinary Ave, Food City</div>
               <div className="flex items-center gap-2"><Phone className="h-4 w-4 shrink-0" /> (555) 123-4567</div>
-              <div className="flex items-center gap-2"><Mail className="h-4 w-4 shrink-0" /> hello@flavours.com</div>
+              <div className="flex items-center gap-2"><Mail className="h-4 w-4 shrink-0" /> hello@mezbaan.com</div>
             </div>
           </div>
           <div className="space-y-4">
@@ -35,13 +49,13 @@ export default function Footer() {
             <h4 className="font-semibold text-sm uppercase tracking-wider text-primary">Quick Links</h4>
             <div className="space-y-2 text-sm opacity-70">
               <a href="/menu" className="block hover:text-primary transition-colors">Our Menu</a>
-              <a href="/reserve" className="block hover:text-primary transition-colors">Reserve a Table</a>
+              {showReserve && <a href="/reserve" className="block hover:text-primary transition-colors">Reserve a Table</a>}
               <a href="/cart" className="block hover:text-primary transition-colors">Order Online</a>
             </div>
           </div>
         </div>
         <div className="border-t border-background/10 mt-12 pt-8 text-center text-xs opacity-50">
-          © 2026 FLAVOURS. All rights reserved.
+          © 2026 MEZBAAN. All rights reserved.
         </div>
       </div>
     </footer>

@@ -1,12 +1,15 @@
 const mongoose = require('mongoose');
 
 const bookingSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true },
-  phone: { type: String, required: true },
+  userId: { type: String, required: true },
+  userEmail: { type: String, required: true },
+  mobile: { type: String, required: true },
+  table: { type: String, required: true },
   date: { type: String, required: true },
   time: { type: String, required: true },
   guests: { type: Number, required: true },
+  status: { type: String, default: 'confirmed' },
+  cancellationNote: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 

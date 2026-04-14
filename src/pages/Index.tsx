@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Star, Flame, Clock, Truck } from "lucide-react";
 import { menuItems, testimonials } from "@/data/menuData";
@@ -10,7 +11,20 @@ const features = [
 ];
 
 export default function Index() {
+  const [userLogged, setUserLogged] = useState(false);
+  const [adminLogged, setAdminLogged] = useState(false);
   const popular = menuItems.filter(i => i.popular).slice(0, 4);
+
+  useEffect(() => {
+    setUserLogged(Boolean(localStorage.getItem("userToken")));
+    setAdminLogged(Boolean(localStorage.getItem("adminToken")));
+    const update = () => {
+      setUserLogged(Boolean(localStorage.getItem("userToken")));
+      setAdminLogged(Boolean(localStorage.getItem("adminToken")));
+    };
+    window.addEventListener("authChanged", update);
+    return () => window.removeEventListener("authChanged", update);
+  }, []);
 
   return (
     <div className="min-h-screen">
@@ -18,8 +32,8 @@ export default function Index() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0">
           <img
-            src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1600&h=900&fit=crop"
-            alt="Delicious food spread"
+            src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1600&q=80"
+            alt="Restaurant interior dining room"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent" />
@@ -30,11 +44,11 @@ export default function Index() {
               🔥 Now Open for Reservations
             </span>
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-white leading-[1.1] tracking-tight">
-              Bold Flavors,<br />
-              <span className="text-primary">Unforgettable</span> Nights
+              Welcome to <span className="text-primary">Mezbaan</span>,<br />
+              your private dining destination
             </h1>
             <p className="text-white/70 text-lg md:text-xl max-w-md leading-relaxed">
-              Experience culinary artistry with our hand-crafted dishes, premium ingredients, and vibrant atmosphere.
+              Book a table, enjoy curated dishes, and step into a warm restaurant experience crafted for family and friends.
             </p>
             <div className="flex flex-wrap gap-4 pt-2">
               <Link
@@ -43,12 +57,21 @@ export default function Index() {
               >
                 Order Now <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                to="/reserve"
-                className="inline-flex items-center gap-2 bg-white/10 text-white backdrop-blur-sm border border-white/20 px-8 py-3.5 rounded-full font-semibold hover:bg-white/20 transition-all"
-              >
-                Book a Table
-              </Link>
+              {userLogged && !adminLogged ? (
+                <Link
+                  to="/reserve"
+                  className="inline-flex items-center gap-2 bg-white/10 text-white backdrop-blur-sm border border-white/20 px-8 py-3.5 rounded-full font-semibold hover:bg-white/20 transition-all"
+                >
+                  Book a Table
+                </Link>
+              ) : (
+                <Link
+                  to="/auth"
+                  className="inline-flex items-center gap-2 bg-white/10 text-white backdrop-blur-sm border border-white/20 px-8 py-3.5 rounded-full font-semibold hover:bg-white/20 transition-all"
+                >
+                  Login to Reserve
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -125,8 +148,8 @@ export default function Index() {
       <section className="container mx-auto px-4 py-20">
         <div className="relative rounded-3xl overflow-hidden">
           <img
-            src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&h=500&fit=crop"
-            alt="Restaurant ambiance"
+            src="https://images.unsplash.com/photo-1541544741938-0af808871cc9?auto=format&fit=crop&w=1200&q=80"
+            alt="Restaurant exterior and dining area"
             className="w-full h-64 md:h-80 object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-black/40 flex items-center">

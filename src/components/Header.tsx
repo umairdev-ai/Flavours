@@ -1,20 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ShoppingCart, Menu, X, UtensilsCrossed } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { cn } from "@/lib/utils";
 
-const navLinks = [
-  { to: "/", label: "Home" },
-  { to: "/menu", label: "Menu" },
-  { to: "/reserve", label: "Reserve" },
-  { to: "/admin", label: "Admin" },
-];
-
 export default function Header() {
   const [open, setOpen] = useState(false);
+  const [isAdminLogged, setIsAdminLogged] = useState(false);
+  const [isUserLogged, setIsUserLogged] = useState(false);
   const { count } = useCart();
   const { pathname } = useLocation();
+
+  useEffect(() => {
+    const updateLogin = () => {
+      setIsAdminLogged(Boolean(localStorage.getItem("adminToken")));
+      setIsUserLogged(Boolean(localStorage.getItem("userToken")));
+    };
+    updateLogin();
+    window.addEventListener("authChanged", updateLogin);
+    return () => window.removeEventListener("authChanged", updateLogin);
+  }, []);
+
+  const navLinks = [
+    { to: "/", label: "Home" },
+    { to: "/menu", label: "Menu" },
+    ...(isUserLogged && !isAdminLogged ? [
+      { to: "/reserve", label: "Reserve" },
+      { to: "/bookings", label: "My Bookings" }
+    ] : []),
+    { to: isAdminLogged ? "/admin" : "/auth", label: isAdminLogged ? "Dashboard" : isUserLogged ? "Account" : "Login" },
+  ];
 
   return (
     <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b">
@@ -22,10 +37,9 @@ export default function Header() {
         <Link to="/" className="flex items-center gap-2 group">
           <UtensilsCrossed className="h-7 w-7 text-primary transition-transform group-hover:rotate-12" />
           <span className="text-xl font-bold tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
-            FLAV<span className="text-primary">OURS</span>
+            MEZB<span className="text-primary">AAN</span>
           </span>
         </Link>
-
         <nav className="hidden md:flex items-center gap-8">
           {navLinks.map(l => (
             <Link
