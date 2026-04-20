@@ -1,11 +1,19 @@
 import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
-import { menuItems, categories } from "@/data/menuData";
+import { menuItems as initialMenuItems, categories, type MenuItem } from "@/data/menuData";
 import MenuCard from "@/components/MenuCard";
 
 export default function MenuPage() {
   const [category, setCategory] = useState("All");
   const [search, setSearch] = useState("");
+  const menuItems = useMemo<MenuItem[]>(() => {
+    try {
+      const saved = localStorage.getItem("menuItems");
+      return saved ? JSON.parse(saved) : initialMenuItems;
+    } catch {
+      return initialMenuItems;
+    }
+  }, []);
 
   const filtered = useMemo(() => {
     return menuItems.filter(item => {

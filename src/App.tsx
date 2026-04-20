@@ -11,6 +11,7 @@ import MenuPage from "./pages/MenuPage";
 import CartPage from "./pages/CartPage";
 import ReservePage from "./pages/ReservePage";
 import BookingsPage from "./pages/BookingsPage";
+import BookingPaymentPage from "./pages/BookingPaymentPage";
 import AdminPage from "./pages/AdminPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/cart" element={<CartPage />} />
             <Route path="/reserve" element={<ReservePage />} />
             <Route path="/bookings" element={<BookingsPage />} />
+            <Route path="/bookings/:bookingId/payment" element={<BookingPaymentPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="*" element={<NotFound />} />

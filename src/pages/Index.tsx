@@ -7,7 +7,7 @@ import MenuCard from "@/components/MenuCard";
 const features = [
   { icon: Flame, title: "Wood-Fired", desc: "Authentic flavors from our custom brick oven" },
   { icon: Clock, title: "Fast Service", desc: "Ready in 30 minutes or it's on us" },
-  { icon: Truck, title: "Free Delivery", desc: "Complimentary delivery on orders over ₹500" },
+  { icon: Truck, title: "Farm-to-Table Traceability", desc: "Verify ingredient origins and delivery timestamps." },
 ];
 
 export default function Index() {
@@ -32,7 +32,7 @@ export default function Index() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0">
           <img
-            src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1600&q=80"
+            src="https://www.franciscosegarra.com/wp-content/uploads/2022/03/restaurant-decoration.jpg"
             alt="Restaurant interior dining room"
             className="w-full h-full object-cover"
           />

@@ -11,7 +11,7 @@ export default function AuthPage() {
   const [activeTab, setActiveTab] = useState<AuthTab>("login");
   const [loginRole, setLoginRole] = useState<LoginRole>("user");
   const [loginForm, setLoginForm] = useState({ email: "", username: "", password: "" });
-  const [registerForm, setRegisterForm] = useState({ name: "", email: "", password: "" });
+  const [registerForm, setRegisterForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   // Email OTP verification state (Registration)
@@ -85,6 +85,34 @@ export default function AuthPage() {
       } else {
         localStorage.setItem("userToken", data.token);
         localStorage.setItem("userName", data.user?.name || "");
+        localStorage.setItem("userEmail", data.user?.email || "");
+
+        // One-time alert check for admin-cancelled bookings upon login
+        try {
+          const bRes = await fetch(buildApiUrl("/bookings/my-bookings"), {
+            headers: { Authorization: `Bearer ${data.token}` }
+          });
+          if (bRes.ok) {
+            const userBookings = await bRes.json();
+            const acknowledged = JSON.parse(localStorage.getItem("acknowledgedCancellations") || "[]");
+            
+            const newAdminCancellations = userBookings.filter((b: any) => 
+              b.status === "cancelled" && 
+              b.cancellationNote && 
+              b.cancellationNote !== "Cancelled by guest" &&
+              !acknowledged.includes(b._id)
+            );
+
+            if (newAdminCancellations.length > 0) {
+              alert(`Notice: ${newAdminCancellations.length} of your reservations ${newAdminCancellations.length > 1 ? 'have' : 'has'} been cancelled by the restaurant. Please review 'My Bookings' for notes.`);
+              const newlyAcknowledged = newAdminCancellations.map((b: any) => b._id);
+              localStorage.setItem("acknowledgedCancellations", JSON.stringify([...acknowledged, ...newlyAcknowledged]));
+            }
+          }
+        } catch (e) {
+          console.error("Cancellation alert check failed:", e);
+        }
+
         setSuccess("User logged in successfully.");
       }
 
@@ -104,11 +132,18 @@ export default function AuthPage() {
     setError("");
     setSuccess("");
 
+    if (registerForm.password !== registerForm.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
     try {
+      // Destructure to exclude confirmPassword from the API request body
+      const { confirmPassword, ...registrationData } = registerForm;
       const res = await fetch(buildApiUrl("/auth/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(registerForm),
+        body: JSON.stringify(registrationData),
       });
 
       const data = await res.json();
@@ -118,6 +153,7 @@ export default function AuthPage() {
 
       localStorage.setItem("userToken", data.token);
       localStorage.setItem("userName", data.user?.name || "");
+      localStorage.setItem("userEmail", data.user?.email || "");
       window.dispatchEvent(new Event("authChanged"));
       setSuccess("Registration successful. Redirecting to reserve...");
       navigate("/reserve");
@@ -129,6 +165,7 @@ export default function AuthPage() {
   const handleLogout = () => {
     localStorage.removeItem("userToken");
     localStorage.removeItem("userName");
+    localStorage.removeItem("userEmail");
     window.dispatchEvent(new Event("authChanged"));
     navigate("/");
   };
@@ -490,6 +527,18 @@ export default function AuthPage() {
                     value={registerForm.password}
                     onChange={e => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
                     className="w-full px-4 py-3 rounded-2xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Confirm Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={registerForm.confirmPassword}
+                    onChange={e => setRegisterForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-2xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 mt-1"
+                    placeholder="Re-enter password"
                   />
                 </div>
                 {error && <p className="text-sm text-destructive">{error}</p>}
