@@ -73,7 +73,14 @@ A modern, full-stack restaurant management application built with React, TypeScr
    MONGO_URI=mongodb://localhost:27017/dine-delight
    JWT_SECRET=your_super_secret_jwt_key_here
    PORT=5000
+   EMAIL_USER=your-email@gmail.com
+   EMAIL_PASS=your-email-app-password
    ```
+
+   Notes:
+   - `EMAIL_USER` and `EMAIL_PASS` are required for OTP email delivery.
+   - For Gmail, use an App Password or another SMTP provider; regular Gmail passwords may be blocked.
+
 
 5. **Start MongoDB**
    ```bash

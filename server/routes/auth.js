@@ -10,13 +10,37 @@ const router = express.Router();
 const otpStore = new Map(); // For registration: email -> { otp, expiry, verified }
 const forgotPasswordStore = new Map(); // For password reset: email -> { otp, expiry, verified }
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+let transporter;
+let useEthereal = false;
+
+const ensureTransporter = async () => {
+  if (transporter) return transporter;
+
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+  } else {
+    const testAccount = await nodemailer.createTestAccount();
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+    useEthereal = true;
+    console.warn('EMAIL_USER / EMAIL_PASS not set. Using Ethereal test SMTP for OTP emails. Preview URLs will be logged to the server console.');
+  }
+
+  return transporter;
+};
 
 // POST /api/auth/send-otp - Send OTP to email for verification
 router.post('/send-otp', async (req, res) => {
@@ -31,8 +55,9 @@ router.post('/send-otp', async (req, res) => {
     const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     otpStore.set(email, { otp, expiry, verified: false });
 
-    await transporter.sendMail({
-      from: `"Flavours Restaurant" <${process.env.EMAIL_USER}>`,
+    const mailTransporter = await ensureTransporter();
+    const info = await mailTransporter.sendMail({
+      from: `"Flavours Restaurant" <${process.env.EMAIL_USER || 'no-reply@dine-delight.local'}>`,
       to: email,
       subject: 'Your Email Verification OTP',
       html: `
@@ -44,6 +69,11 @@ router.post('/send-otp', async (req, res) => {
         </div>
       `,
     });
+
+    if (useEthereal) {
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      console.warn(`OTP verification email preview: ${previewUrl}`);
+    }
 
     res.json({ message: 'OTP sent successfully' });
   } catch (err) {
@@ -137,8 +167,9 @@ router.post('/forgot-password', async (req, res) => {
     const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     forgotPasswordStore.set(email, { otp, expiry, verified: false });
 
-    await transporter.sendMail({
-      from: `"Flavours Restaurant" <${process.env.EMAIL_USER}>`,
+    const mailTransporter = await ensureTransporter();
+    const info = await mailTransporter.sendMail({
+      from: `"Flavours Restaurant" <${process.env.EMAIL_USER || 'no-reply@dine-delight.local'}>`,
       to: email,
       subject: 'Password Reset OTP',
       html: `
@@ -150,6 +181,11 @@ router.post('/forgot-password', async (req, res) => {
         </div>
       `,
     });
+
+    if (useEthereal) {
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      console.warn(`Password reset email preview: ${previewUrl}`);
+    }
 
     res.json({ message: 'OTP sent to your registered email' });
   } catch (err) {
