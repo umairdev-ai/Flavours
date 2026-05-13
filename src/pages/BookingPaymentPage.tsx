@@ -19,6 +19,10 @@ interface Booking {
   status?: string;
   paymentStatus?: string;
   paymentMethod?: string;
+  tableCharge?: number;
+  baseAmount?: number;
+  surchargeAmount?: number;
+  totalAmount?: number;
   items?: BookingItem[];
 }
 
@@ -30,10 +34,16 @@ export default function BookingPaymentPage() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const bookingTotal = useMemo(
-    () => booking?.items?.reduce((acc, item) => acc + item.price * item.quantity, 0) || 0,
-    [booking]
-  );
+  const bookingTotal = useMemo(() => {
+    if (!booking) return 0;
+    if (booking.totalAmount != null) return booking.totalAmount;
+
+    const itemAmount = booking.items?.reduce((acc, item) => acc + item.price * item.quantity, 0) || 0;
+    const tableCharge = booking.tableCharge ?? 0;
+    const baseAmount = booking.baseAmount ?? (itemAmount + tableCharge);
+    const surcharge = booking.surchargeAmount ?? 0;
+    return baseAmount + surcharge;
+  }, [booking]);
 
   useEffect(() => {
     const fetchBooking = async () => {

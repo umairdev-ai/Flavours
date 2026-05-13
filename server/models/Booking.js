@@ -14,6 +14,7 @@ const bookingSchema = new mongoose.Schema({
     price: { type: Number, required: true },
     quantity: { type: Number, required: true }
   }],
+  tableCharge: { type: Number, default: 0 },
   baseAmount: { type: Number, default: 0 },
   surchargeAmount: { type: Number, default: 0 },
   totalAmount: { type: Number, default: 0 },

@@ -23,6 +23,7 @@ interface Booking {
   paymentStatus?: string;
   paymentMethod?: string;
   items?: BookingItem[];
+  tableCharge?: number;
   baseAmount?: number;
   surchargeAmount?: number;
   totalAmount?: number;
@@ -130,9 +131,12 @@ export default function BookingsPage() {
 
   const renderBookedItems = (booking: Booking) => {
     const items = booking.items || [];
-    if (items.length === 0) return null;
+    const tableCharge = booking.tableCharge ?? 0;
+    const hasItems = items.length > 0;
+    if (!hasItems && tableCharge === 0) return null;
 
-    const subtotal = booking.baseAmount ?? items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+    const itemSubtotal = items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+    const subtotal = booking.baseAmount ?? (itemSubtotal + tableCharge);
     const surcharge = booking.surchargeAmount ?? 0;
     const total = booking.totalAmount ?? (subtotal + surcharge);
     const isPaid = ["completed", "paid"].includes((booking.paymentStatus || "").toLowerCase());
@@ -141,10 +145,11 @@ export default function BookingsPage() {
       <div className="space-y-4 pt-6 border-t border-dashed border-primary/10">
         <div className="flex items-center justify-between border-b border-primary/5 pb-2">
           <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Order Summary</p>
-          <span className="text-[10px] font-bold text-primary px-2 py-0.5 rounded-full">{items.length} Items</span>
+          {hasItems ? <span className="text-[10px] font-bold text-primary px-2 py-0.5 rounded-full">{items.length} Items</span> : null}
         </div>
 
-        <div className="space-y-3">
+        {hasItems ? (
+          <div className="space-y-3">
           {items.map((item, idx) => {
             const isAvailable = menuLookup[item.name.toLowerCase()] ?? true;
             return (
@@ -161,12 +166,21 @@ export default function BookingsPage() {
             );
           })}
         </div>
+        ) : null}
 
         <div className="pt-3 border-t border-dashed border-primary/10 space-y-1.5">
-          <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
-            <span>Subtotal</span>
-            <span>Rs. {subtotal}</span>
-          </div>
+          {hasItems && (
+            <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
+              <span>Food subtotal</span>
+              <span>Rs. {itemSubtotal}</span>
+            </div>
+          )}
+          {tableCharge > 0 && (
+            <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
+              <span>Table charge</span>
+              <span>Rs. {tableCharge}</span>
+            </div>
+          )}
           {surcharge > 0 && (
             <div className="flex justify-between text-[11px] text-amber-700 font-bold italic">
               <span>Rush Surcharge (20%)</span>
@@ -344,7 +358,7 @@ export default function BookingsPage() {
                             <button
                               onClick={() => handleCancelBooking(booking._id)}
                               disabled={cancellingId === booking._id || !canCancel(booking.date, booking.time)}
-                              className="w-full bg-destructive/10 text-destructive hover:bg-destructive text-destructive-foreground border border-destructive/20 py-4 rounded-2xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                              className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 border border-destructive py-4 rounded-2xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                               <Trash2 className="h-4 w-4" />
                               {cancellingId === booking._id ? "Processing..." : "Cancel Reservation"}

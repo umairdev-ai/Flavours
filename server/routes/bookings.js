@@ -13,8 +13,9 @@ const getBookingLeadDays = (bookingDate) => {
   return Math.round((booking.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
 };
 
-const calculateBookingAmounts = (date, items = []) => {
-  const baseAmount = items.reduce((sum, item) => sum + ((Number(item.price) || 0) * (Number(item.quantity) || 0)), 0);
+const calculateBookingAmounts = (date, items = [], tableCharge = 0) => {
+  const itemsAmount = items.reduce((sum, item) => sum + ((Number(item.price) || 0) * (Number(item.quantity) || 0)), 0);
+  const baseAmount = itemsAmount + Number(tableCharge || 0);
   const leadDays = getBookingLeadDays(date);
   const rushEligible = leadDays === 0 || leadDays === 1;
   const surchargeAmount = rushEligible ? Math.round(baseAmount * RUSH_BOOKING_SURCHARGE_RATE) : 0;
@@ -105,7 +106,7 @@ router.post('/', auth, async (req, res) => {
       return res.status(403).json({ message: 'Only logged in guests can book a table' });
     }
 
-    const { date, time, guests, table, mobile, name, items, paymentMethod, paymentId, paymentStatus } = req.body;
+    const { date, time, guests, table, mobile, name, items, tableCharge = 0, paymentMethod, paymentId, paymentStatus } = req.body;
     if (!date || !time || !guests || !table || !mobile) {
       return res.status(400).json({ message: 'Date, time, guests, table selection and mobile number are required' });
     }
@@ -117,7 +118,7 @@ router.post('/', auth, async (req, res) => {
     }
 
     const normalizedItems = Array.isArray(items) ? items : [];
-    const { baseAmount, surchargeAmount, totalAmount } = calculateBookingAmounts(date, normalizedItems);
+    const { baseAmount, surchargeAmount, totalAmount } = calculateBookingAmounts(date, normalizedItems, tableCharge);
 
     const newBooking = new Booking({
       userId: req.user.id,
@@ -129,6 +130,7 @@ router.post('/', auth, async (req, res) => {
       time,
       guests,
       items: normalizedItems,
+      tableCharge,
       baseAmount,
       surchargeAmount,
       totalAmount,

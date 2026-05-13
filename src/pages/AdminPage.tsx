@@ -56,6 +56,7 @@ export default function AdminPage() {
   const [cancelModalId, setCancelModalId] = useState<string | null>(null);
   const [cancelNote, setCancelNote] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [paymentUpdatingId, setPaymentUpdatingId] = useState<string | null>(null);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
   useEffect(() => {
@@ -144,6 +145,33 @@ export default function AdminPage() {
       console.error("Error cancelling booking:", error);
     }
     setCancelling(false);
+  };
+
+  const handleMarkAmountPaid = async (bookingId: string) => {
+    if (!token) return;
+    setPaymentUpdatingId(bookingId);
+    try {
+      const res = await fetch(buildApiUrl(`/admin/bookings/${bookingId}/pay`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          paymentMethod: "Pay at Restaurant",
+          paymentId: "N/A",
+          paymentStatus: "Completed"
+        })
+      });
+
+      if (res.ok) {
+        const updatedBooking = await res.json();
+        setBookings(prev => prev.map(b => b._id === bookingId ? { ...b, paymentMethod: updatedBooking.paymentMethod, paymentId: updatedBooking.paymentId, paymentStatus: updatedBooking.paymentStatus } : b));
+      }
+    } catch (error) {
+      console.error("Error updating payment status:", error);
+    }
+    setPaymentUpdatingId(null);
   };
 
   const uploadImageFile = async (file: File) => {
@@ -449,7 +477,7 @@ export default function AdminPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">{item.category} · ?{item.price}</p>
+                    <p className="text-xs text-muted-foreground">{item.category} ï¿½ ?{item.price}</p>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => startEdit(item)} className="p-2 hover:bg-muted rounded-lg transition-colors"><Pencil className="h-4 w-4" /></button>
@@ -612,10 +640,15 @@ export default function AdminPage() {
                                     <div className="space-y-1">
                                       <p className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground">Payment</p>
                                       <p className="text-xs font-semibold">{r.paymentMethod || "At Restaurant"}</p>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex flex-wrap items-center gap-2">
                                         <p className={`text-[10px] font-bold ${r.paymentStatus === "Completed" ? "text-green-600" : "text-amber-600"}`}>
                                           {r.paymentStatus || "Pending"}
                                         </p>
+                                        {r.paymentStatus !== "Completed" && (
+                                          <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-800">
+                                            Unpaid
+                                          </span>
+                                        )}
                                         <p className="text-xs font-bold text-foreground">Rs. {totalAmount}</p>
                                       </div>
                                       {r.paymentId && r.paymentId !== "N/A" && <p className="text-[9px] text-muted-foreground font-mono break-all">{r.paymentId}</p>}
@@ -659,12 +692,23 @@ export default function AdminPage() {
                                   )}
                                 </div>
                                 {!isCancelled && (
-                                  <button
-                                    onClick={() => { setCancelModalId(r._id); setCancelNote(""); }}
-                                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors"
-                                  >
-                                    <XCircle className="h-3.5 w-3.5" /> Cancel
-                                  </button>
+                                  <div className="flex flex-wrap gap-2">
+                                    {(r.paymentStatus !== "Completed" && (!r.paymentMethod || r.paymentMethod.toLowerCase().includes("restaurant"))) && (
+                                      <button
+                                        onClick={() => handleMarkAmountPaid(r._id)}
+                                        disabled={paymentUpdatingId === r._id}
+                                        className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-100 px-4 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        {paymentUpdatingId === r._id ? "Updating..." : "Mark Paid on Visit"}
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => { setCancelModalId(r._id); setCancelNote(""); }}
+                                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors"
+                                    >
+                                      <XCircle className="h-3.5 w-3.5" /> Cancel
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </div>

@@ -117,4 +117,28 @@ router.patch('/bookings/:id/cancel', auth, async (req, res) => {
   }
 });
 
+// PATCH /api/admin/bookings/:id/pay - Mark a booking paid at restaurant (protected)
+router.patch('/bookings/:id/pay', auth, async (req, res) => {
+  if (!req.admin) {
+    return res.status(403).json({ message: 'Admin access denied' });
+  }
+
+  try {
+    const { paymentMethod, paymentId, paymentStatus } = req.body;
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    booking.paymentMethod = paymentMethod || 'Pay at Restaurant';
+    booking.paymentId = paymentId || booking.paymentId || 'N/A';
+    booking.paymentStatus = paymentStatus || 'Completed';
+
+    await booking.save();
+    res.json(booking);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;

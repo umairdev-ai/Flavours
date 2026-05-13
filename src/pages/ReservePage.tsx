@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, Users, Clock, CheckCircle, ArrowRight, Plus, Minus, Trash2, CreditCard, Wallet } from "lucide-react";
+import { CalendarDays, Users, Clock, CheckCircle, ArrowRight, Plus, Minus, Trash2, CreditCard, Wallet, AlertTriangle } from "lucide-react";
 import { tables } from "@/data/menuData";
 import { Link } from "react-router-dom";
 import { buildApiUrl } from "@/lib/api";
@@ -17,9 +17,15 @@ export default function ReservePage() {
   const [error, setError] = useState("");
   const [isUserLogged, setIsUserLogged] = useState(false);
   const [isAdminLogged, setIsAdminLogged] = useState(false);
+  const [showNoItemsAlert, setShowNoItemsAlert] = useState(false);
 
+  const TABLE_RATE_PER_GUEST = 200;
   const guestCount = parseInt(form.guests) || 2;
-  const availableTables = tables.filter(t => t.available && t.capacity >= guestCount);
+  const tableCharge = guestCount * TABLE_RATE_PER_GUEST;
+  const availableTables = tables
+    .filter(t => t.available && t.capacity >= guestCount)
+    .sort((a, b) => a.capacity - b.capacity || a.number - b.number);
+  const selectedTable = availableTables[0] ?? null;
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
   const formatDateInput = (date: Date) => {
@@ -45,7 +51,8 @@ export default function ReservePage() {
   const bookingLeadDays = getBookingLeadDays(form.date);
   const rushBookingApplies = bookingLeadDays === 0 || bookingLeadDays === 1;
   const surchargeAmount = rushBookingApplies ? Math.round(subtotal * 0.2) : 0;
-  const totalWithSurcharge = subtotal + surchargeAmount;
+  const totalBeforeSurcharge = subtotal + tableCharge;
+  const totalWithSurcharge = totalBeforeSurcharge + surchargeAmount;
 
   const timeSlotHours = [7, 9, 11, 13, 15, 17, 19, 21, 23, 1];
   const timeSlots = timeSlotHours.map((hour) => {
@@ -55,14 +62,13 @@ export default function ReservePage() {
     return { value: timeValue, label: `${displayHour}:00 ${period}` };
   });
 
-  const availableTimeSlots = form.date === today
-    ? timeSlots.filter((slot) => {
-        const slotHour = parseInt(slot.value.split(":")[0], 10);
-        const slotMinutes = (slotHour === 1 ? 25 : slotHour) * 60;
-        const currentMinutes = todayDate.getHours() * 60 + todayDate.getMinutes();
-        return slotMinutes > currentMinutes;
-      })
-    : timeSlots;
+  const availableTimeSlots = timeSlots.filter((slot) => {
+    const slotHour = parseInt(slot.value.split(":")[0], 10);
+    const slotDateTime = new Date(`${form.date}T${slot.value}:00`);
+    const now = new Date();
+    const diffInHours = (slotDateTime - now) / (1000 * 60 * 60);
+    return diffInHours >= 6;
+  });
 
   useEffect(() => {
     setIsAdminLogged(Boolean(localStorage.getItem("adminToken")));
@@ -165,6 +171,12 @@ export default function ReservePage() {
       return;
     }
 
+    // If no menu items selected, ask for confirmation
+    if (cartItems.length === 0) {
+      setShowNoItemsAlert(true);
+      return;
+    }
+
     // If user has pre-ordered items, show payment choice.
     // Otherwise, proceed directly to booking as there's nothing to pay for.
     if (totalWithSurcharge > 0) {
@@ -177,9 +189,8 @@ export default function ReservePage() {
   const processBooking = async (pInfo = paymentInfo) => {
     if (loading) return;
     
-    const availableTable = availableTables[0];
-    if (!availableTable) {
-      setError("No tables available.");
+    if (!selectedTable) {
+      setError("No tables available for the selected party size. Try a different date, time, or guest count.");
       return;
     }
 
@@ -198,10 +209,11 @@ export default function ReservePage() {
         date: form.date,
         time: form.time,
         guests: guestCount,
-        table: availableTable.id,
+        table: selectedTable.id,
         mobile: form.mobile,
         name: userName || "Guest",
         items: cartItems.map(i => ({ name: i.name, price: i.price, quantity: i.quantity })),
+        tableCharge,
         paymentMethod: pInfo.method,
         paymentId: pInfo.id,
         paymentStatus: pInfo.status
@@ -219,7 +231,7 @@ export default function ReservePage() {
       if (res.ok) {
         setBookedItems([...cartItems]);
         clearCart();
-        setAllottedTableNo(availableTable.number);
+        setAllottedTableNo(selectedTable.number);
         setPaymentDetails(pInfo);
         setConfirmed(true);
         setShowPaymentChoice(false);
@@ -245,7 +257,7 @@ export default function ReservePage() {
         <div className="bg-card border rounded-3xl p-8 w-full max-w-md space-y-6 animate-in fade-in zoom-in">
                     <div className="text-center space-y-2">
             <h2 className="text-2xl font-bold">Payment Method</h2>
-            <p className="text-sm text-muted-foreground">Select how you'd like to pay for your pre-ordered items (Rs. {totalWithSurcharge})</p>
+            <p className="text-sm text-muted-foreground">Select how you'd like to pay for your table reservation and pre-ordered items (Rs. {totalWithSurcharge})</p>
           </div>
 
           {rushBookingApplies && subtotal > 0 && (
@@ -288,6 +300,46 @@ export default function ReservePage() {
           {error && <p className="text-destructive text-sm text-center font-medium bg-destructive/10 p-3 rounded-xl animate-in shake-in">{error}</p>}
 
           <button onClick={() => { setShowPaymentChoice(false); setError(""); }} className="w-full text-xs text-muted-foreground hover:underline">Back to Details</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (showNoItemsAlert) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="bg-card border rounded-3xl p-8 w-full max-w-md space-y-6 animate-in fade-in zoom-in">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="h-8 w-8 text-amber-600" />
+            </div>
+            <h2 className="text-2xl font-bold">No Menu Items Selected</h2>
+            <p className="text-muted-foreground">You're booking a table without pre-ordering any menu items. You can still order when you arrive at the restaurant.</p>
+            <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">Table charges will be collected upon your visit.</p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={async () => {
+                setShowNoItemsAlert(false);
+                await processBooking({ method: "Pay at Restaurant", id: "N/A", status: "Pending" });
+              }}
+              className="w-full bg-primary text-primary-foreground py-3 rounded-2xl font-bold hover:bg-primary/90 transition-all"
+            >
+              Yes, Book Table Only
+            </button>
+
+            <button
+              onClick={() => {
+                setShowNoItemsAlert(false);
+                // Navigate to menu page
+                window.location.href = '/menu';
+              }}
+              className="w-full bg-secondary text-secondary-foreground py-3 rounded-2xl font-bold hover:bg-secondary/80 transition-all"
+            >
+              No, Add Menu Items First
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -359,6 +411,32 @@ export default function ReservePage() {
               </div>
             </div>
 
+            <div className="rounded-2xl border border-primary/10 bg-primary/5 p-5">
+              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest mb-3">Booking Charges</p>
+              <div className="grid grid-cols-1 gap-3 text-sm">
+                <div className="flex justify-between">
+                  <span>Table charge</span>
+                  <span>Rs. {tableCharge}</span>
+                </div>
+                {bookedItems.length > 0 && (
+                  <div className="flex justify-between">
+                    <span>Food subtotal</span>
+                    <span>Rs. {bookedItems.reduce((acc, i) => acc + i.price * i.quantity, 0)}</span>
+                  </div>
+                )}
+                {rushBookingApplies && bookedItems.length > 0 && (
+                  <div className="flex justify-between text-amber-700">
+                    <span>Rush surcharge</span>
+                    <span>Rs. {surchargeAmount}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-black text-primary">
+                  <span>Total charged</span>
+                  <span>Rs. {totalWithSurcharge}</span>
+                </div>
+              </div>
+            </div>
+
             {bookedItems.length > 0 && (
               <div className="space-y-4 pt-6 border-t border-dashed">
                 <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pre-Ordered Items</p>
@@ -380,7 +458,7 @@ export default function ReservePage() {
                      </div>
                    )}
                    <div className="flex justify-between items-center font-black text-base text-primary">
-                      <span>Total Paid</span>
+                      <span>{paymentInfo.status === "Completed" ? "Total Paid" : "Amount Due"}</span>
                       <span>Rs. {bookedItems.reduce((acc, i) => acc + i.price * i.quantity, 0) + (rushBookingApplies ? surchargeAmount : 0)}</span>
                    </div>
                    <div className="flex items-center justify-between mt-2 px-3 py-1.5 bg-muted/50 rounded-lg">
@@ -400,6 +478,11 @@ export default function ReservePage() {
               </Link>
             </div>
           </div>
+          <div className="text-center pb-4">
+            <p className="text-sm text-amber-700 bg-amber-50 px-4 py-2 rounded-lg inline-block">
+              💰 Table cost only should be paid while visiting the restaurant
+            </p>
+          </div>
           <p className="text-center pb-8 text-[10px] text-muted-foreground">Please show this screen at the reception upon arrival.</p>
         </div>
       </div>
@@ -408,10 +491,13 @@ export default function ReservePage() {
 
   return (
     <div className="min-h-screen">
-      <div className="bg-gradient-to-br from-primary/10 via-background to-secondary/10 py-16">
-        <div className="container mx-auto px-4 text-center space-y-4">
-          <h1 className="text-4xl md:text-5xl font-bold">Reserve a Table</h1>
-          <p className="text-muted-foreground max-w-md mx-auto">Book your perfect dining experience with us</p>
+      <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-secondary/20 py-20">
+        <div className="container mx-auto px-4 text-center space-y-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
+            <CalendarDays className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="text-5xl md:text-6xl font-extrabold text-foreground">Reserve Your Table</h1>
+          <p className="text-muted-foreground max-w-lg mx-auto text-lg">Secure your spot at Mezbaan and enjoy an unforgettable dining experience</p>
         </div>
       </div>
 
@@ -419,11 +505,19 @@ export default function ReservePage() {
         <form onSubmit={handleSubmit} className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Details */}
-            <div className="bg-card border rounded-2xl p-6 space-y-5 h-fit">
-              <h3 className="text-lg font-bold flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary" /> Reservation Details</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> Date</label>
+            <div className="bg-card border border-border/50 rounded-3xl p-8 shadow-lg space-y-6">
+              <div className="flex items-center gap-3 pb-4 border-b border-border/20">
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                  <CalendarDays className="h-4 w-4 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold">Reservation Details</h3>
+              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4 text-primary" />
+                      Date
+                    </label>
                     <input 
                       type="date" 
                       required 
@@ -431,101 +525,172 @@ export default function ReservePage() {
                       max={maxBookingDate}
                       value={form.date} 
                       onChange={e => setForm(p => ({ ...p, date: e.target.value, time: "" }))}
-                      className="w-full px-4 py-2.5 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" 
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Time</label>
-                  <select 
-                    required 
-                    value={form.time} 
-                    onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    <option value="">Select time</option>
-                    {availableTimeSlots.map(slot => (
-                      <option key={slot.value} value={slot.value}>{slot.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Guests</label>
-                <select value={form.guests} onChange={e => { setForm(p => ({ ...p, guests: e.target.value })); }}
-                  className="w-full px-4 py-2.5 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
-                  {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n} {n === 1 ? "Guest" : "Guests"}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Mobile Number *</label>
-                  <input
-                    type="tel"
-                    required
-                    pattern="[0-9]{10}"
-                    placeholder="10-digit mobile number"
-                    value={form.mobile}
-                    onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-              </div>
-              
-                            {availableTables.length === 0 && (
-                <p className="text-destructive text-sm font-medium">Sorry, no tables are available for {guestCount} guests at this time.</p>
-              )}
+                      className="w-full px-4 py-3 rounded-xl border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all" 
+                    />
+                  </div>
 
-              {rushBookingApplies && (
-                <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  Booking for {bookingLeadDays === 0 ? "today" : "tomorrow"} includes a 20% rush surcharge on pre-ordered items.
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-primary" />
+                      Time
+                    </label>
+                    <select 
+                      required 
+                      value={form.time} 
+                      onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                    >
+                      <option value="">Select time</option>
+                      {availableTimeSlots.map(slot => (
+                        <option key={slot.value} value={slot.value}>{slot.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">Reservations must be at least 6 hours in advance</p>
+                  </div>
                 </div>
-              )}
 
-              <button
-                type="submit"
-                disabled={availableTables.length === 0 || !form.date || !form.time || !form.mobile || loading}
-                className="w-full bg-primary text-primary-foreground py-3.5 rounded-xl font-semibold hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
-              >
-                {loading ? "Processing..." : "Confirm Reservation"}
-              </button>
-              {error && <p className="text-destructive text-sm mt-2">{error}</p>}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Users className="h-4 w-4 text-primary" />
+                      Number of Guests
+                    </label>
+                    <select value={form.guests} onChange={e => { setForm(p => ({ ...p, guests: e.target.value })); }}
+                      className="w-full px-4 py-3 rounded-xl border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n} {n === 1 ? "Guest" : "Guests"}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">Mobile Number</label>
+                    <input
+                      type="tel"
+                      required
+                      pattern="[0-9]{10}"
+                      placeholder="Enter 10-digit number"
+                      value={form.mobile}
+                      onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+                {availableTables.length === 0 ? (
+                  <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-4 text-sm text-destructive">
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 h-5 bg-destructive/10 rounded-full flex items-center justify-center mt-0.5">
+                        <div className="w-2 h-2 bg-destructive rounded-full"></div>
+                      </div>
+                      <div>
+                        <p className="font-medium">No tables available</p>
+                        <p className="text-xs mt-1">Sorry, no tables are available for {guestCount} guests at this time. Please try a different date, time, or guest count.</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-primary/20 bg-primary/5 px-6 py-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-5 h-5 bg-primary/10 rounded-full flex items-center justify-center mt-0.5">
+                          <CheckCircle className="h-3 w-3 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-primary">Table Available</p>
+                          <p className="text-sm text-primary/80 mt-1">Recommended: Table T-{selectedTable?.number} (fits up to {selectedTable?.capacity} guests)</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-muted/30 rounded-2xl p-6 space-y-3">
+                      <h4 className="font-semibold text-sm text-foreground">Cost Breakdown</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>Table charge ({guestCount} × ₹{TABLE_RATE_PER_GUEST})</span>
+                          <span>₹{tableCharge}</span>
+                        </div>
+                        {subtotal > 0 && (
+                          <div className="flex justify-between">
+                            <span>Food subtotal</span>
+                            <span>₹{subtotal}</span>
+                          </div>
+                        )}
+                        {rushBookingApplies && (
+                          <div className="flex justify-between text-amber-700">
+                            <span>Rush surcharge (20%)</span>
+                            <span>₹{surchargeAmount}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-bold text-primary border-t pt-2">
+                          <span>Estimated Total</span>
+                          <span>₹{totalWithSurcharge}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {rushBookingApplies && (
+                  <div className="rounded-2xl border border-amber-300/50 bg-amber-50/50 px-6 py-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center mt-0.5">
+                        <Clock className="h-3 w-3 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-amber-900">Rush Booking</p>
+                        <p className="text-sm text-amber-800 mt-1">Booking for {bookingLeadDays === 0 ? "today" : "tomorrow"} includes a 20% surcharge on pre-ordered items.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={availableTables.length === 0 || !form.date || !form.time || !form.mobile || loading}
+                  className="w-full bg-primary text-primary-foreground py-4 rounded-2xl font-bold hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] shadow-lg shadow-primary/20"
+                >
+                  {loading ? "Processing..." : "Confirm Reservation"}
+                </button>
+                {error && (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
             </div>
 
             {/* Menu Selection */}
             <div className="space-y-4">
-              <div className="bg-card border rounded-2xl p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold">Selected Items</h3>
+              <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-lg">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold">Your Order</h3>
                   <Link 
                     to="/menu" 
-                    className="text-xs text-primary font-medium hover:underline flex items-center gap-1"
+                    className="text-sm text-primary font-medium hover:underline flex items-center gap-1"
                   >
-                    Add more <Plus className="h-3 w-3" />
+                    Add items <Plus className="h-3 w-3" />
                   </Link>
                 </div>
                 
                 {cartItems.length > 0 ? (
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
                     {cartItems.map(item => (
-                      <div key={item.id} className="flex items-center justify-between bg-background border rounded-lg p-3">
+                      <div key={item.id} className="flex items-center justify-between bg-muted/30 border rounded-xl p-4">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{item.name}</p>
+                          <p className="text-sm font-semibold truncate">{item.name}</p>
                           <p className="text-xs text-muted-foreground">₹{item.price} × {item.quantity}</p>
                         </div>
-                        <div className="flex items-center gap-2 ml-2">
-                          <div className="flex items-center gap-1 bg-muted rounded-md px-1">
+                        <div className="flex items-center gap-3 ml-4">
+                          <div className="flex items-center gap-1">
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              className="p-1 hover:text-primary transition-colors"
+                              className="w-6 h-6 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-xs"
                             >
                               <Minus className="h-3 w-3" />
                             </button>
-                            <span className="text-xs font-semibold w-4 text-center">{item.quantity}</span>
+                            <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              className="p-1 hover:text-primary transition-colors"
+                              className="w-6 h-6 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-xs"
                             >
                               <Plus className="h-3 w-3" />
                             </button>
@@ -533,7 +698,7 @@ export default function ReservePage() {
                           <button
                             type="button"
                             onClick={() => removeItem(item.id)}
-                            className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                            className="text-destructive hover:text-destructive/80 p-1"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -542,19 +707,19 @@ export default function ReservePage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-10 space-y-3">
-                    <p className="text-sm text-muted-foreground">No items selected yet.</p>
-                    <Link 
-                      to="/menu" 
-                      className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary/20 transition-all"
-                    >
+                  <div className="text-center py-8">
+                    <div className="w-12 h-12 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Plus className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground mb-4">No items selected</p>
+                    <Link to="/menu" className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:bg-primary/90">
                       Browse Menu
                     </Link>
                   </div>
                 )}
                 
                 {cartItems.length > 0 && (
-                                    <div className="pt-4 border-t border-dashed space-y-2">
+                  <div className="pt-4 border-t border-dashed space-y-2">
                     <div className="flex justify-between items-center font-medium">
                       <span>Food Subtotal:</span>
                       <span>Rs. {subtotal}</span>
