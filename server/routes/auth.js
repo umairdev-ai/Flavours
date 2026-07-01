@@ -18,7 +18,11 @@ const ensureTransporter = async () => {
 
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // upgrade later with STARTTLS
+      requireTLS: true,
+      family: 4, // force IPv4 (Render has no outbound IPv6 -> ENETUNREACH)
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
