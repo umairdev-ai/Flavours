@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const dns = require('dns').promises;
+const { Resend } = require('resend');
 const User = require('../models/User');
 
 const router = express.Router();
@@ -13,6 +14,14 @@ const forgotPasswordStore = new Map(); // For password reset: email -> { otp, ex
 
 let transporter;
 let useEthereal = false;
+let resendClient;
+
+const getResend = () => {
+  if (!resendClient && process.env.RESEND_API_KEY) {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resendClient;
+};
 
 const ensureTransporter = async () => {
   if (transporter) return transporter;
@@ -62,6 +71,66 @@ const ensureTransporter = async () => {
   return transporter;
 };
 
+// Send an email through Brevo's HTTPS API (port 443). This works on hosts that
+// block outbound SMTP ports (e.g. Render's free tier) and, unlike Resend, allows
+// a single verified sender address (a plain Gmail) instead of a whole domain.
+const sendViaBrevo = async ({ to, subject, html }) => {
+  const senderEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const senderName = process.env.EMAIL_FROM_NAME || 'Flavours Restaurant';
+
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: senderName, email: senderEmail },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (!res.ok) {
+    const details = await res.text();
+    throw new Error(`Brevo failed to send the email: ${res.status} ${details}`);
+  }
+
+  const data = await res.json().catch(() => ({}));
+  return { provider: 'brevo', id: data && data.messageId };
+};
+
+// Unified email sender. Prefers Brevo's HTTPS API, then Resend, both of which work
+// on hosts that block outbound SMTP ports (e.g. Render's free tier). Falls back to
+// SMTP / Ethereal for local development when no HTTP provider is configured.
+const sendEmail = async ({ to, subject, html }) => {
+  if (process.env.BREVO_API_KEY) {
+    return sendViaBrevo({ to, subject, html });
+  }
+
+  const resend = getResend();
+  if (resend) {
+    const from = process.env.EMAIL_FROM || 'Flavours Restaurant <onboarding@resend.dev>';
+    const { data, error } = await resend.emails.send({ from, to, subject, html });
+    if (error) throw new Error(error.message || 'Resend failed to send the email');
+    return { provider: 'resend', id: data && data.id };
+  }
+
+  const mailTransporter = await ensureTransporter();
+  const info = await mailTransporter.sendMail({
+    from: `"Flavours Restaurant" <${process.env.EMAIL_USER || 'no-reply@dine-delight.local'}>`,
+    to,
+    subject,
+    html,
+  });
+  if (useEthereal) {
+    console.warn(`Email preview: ${nodemailer.getTestMessageUrl(info)}`);
+  }
+  return { provider: useEthereal ? 'ethereal' : 'smtp' };
+};
+
 // POST /api/auth/send-otp - Send OTP to email for verification
 router.post('/send-otp', async (req, res) => {
   try {
@@ -75,9 +144,7 @@ router.post('/send-otp', async (req, res) => {
     const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     otpStore.set(email, { otp, expiry, verified: false });
 
-    const mailTransporter = await ensureTransporter();
-    const info = await mailTransporter.sendMail({
-      from: `"Flavours Restaurant" <${process.env.EMAIL_USER || 'no-reply@dine-delight.local'}>`,
+    await sendEmail({
       to: email,
       subject: 'Your Email Verification OTP',
       html: `
@@ -89,11 +156,6 @@ router.post('/send-otp', async (req, res) => {
         </div>
       `,
     });
-
-    if (useEthereal) {
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      console.warn(`OTP verification email preview: ${previewUrl}`);
-    }
 
     res.json({ message: 'OTP sent successfully' });
   } catch (err) {
@@ -187,9 +249,7 @@ router.post('/forgot-password', async (req, res) => {
     const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     forgotPasswordStore.set(email, { otp, expiry, verified: false });
 
-    const mailTransporter = await ensureTransporter();
-    const info = await mailTransporter.sendMail({
-      from: `"Flavours Restaurant" <${process.env.EMAIL_USER || 'no-reply@dine-delight.local'}>`,
+    await sendEmail({
       to: email,
       subject: 'Password Reset OTP',
       html: `
@@ -201,11 +261,6 @@ router.post('/forgot-password', async (req, res) => {
         </div>
       `,
     });
-
-    if (useEthereal) {
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      console.warn(`Password reset email preview: ${previewUrl}`);
-    }
 
     res.json({ message: 'OTP sent to your registered email' });
   } catch (err) {
