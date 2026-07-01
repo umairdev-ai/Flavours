@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const dns = require('dns').promises;
 const User = require('../models/User');
 
 const router = express.Router();
@@ -17,15 +18,30 @@ const ensureTransporter = async () => {
   if (transporter) return transporter;
 
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    // Resolve Gmail's SMTP host to an IPv4 address ourselves. Render containers
+    // have no outbound IPv6, so letting nodemailer pick the AAAA record causes
+    // "connect ENETUNREACH <ipv6>" after a long timeout. Passing a raw IPv4 host
+    // (with tls.servername so the certificate still validates) avoids that.
+    const smtpHostname = 'smtp.gmail.com';
+    let smtpHost = smtpHostname;
+    try {
+      const [ipv4] = await dns.resolve4(smtpHostname);
+      if (ipv4) smtpHost = ipv4;
+    } catch (e) {
+      console.warn(`Could not resolve ${smtpHostname} to IPv4, falling back to hostname:`, e.message);
+    }
+
     transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
+      host: smtpHost,
       port: 587,
       secure: false, // upgrade later with STARTTLS
       requireTLS: true,
-      family: 4, // force IPv4 (Render has no outbound IPv6 -> ENETUNREACH)
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        servername: smtpHostname, // keep SNI/cert validation against the real hostname
       },
     });
   } else {
